@@ -1,0 +1,452 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>출근길 추월</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<style>
+  /* 단일 다크 테마 게임 화면 */
+  :root { --bg: #0f172a; --fg: #ffffff; color-scheme: dark; }
+  html, body { background: var(--bg); color: var(--fg); }
+  canvas, button, a {
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  @keyframes flashEffect {
+    0% { background-color: rgba(239, 68, 68, 0.6); }
+    100% { background-color: transparent; }
+  }
+  .flash { animation: flashEffect 0.3s ease-out; }
+  @media (prefers-reduced-motion: reduce) { .flash { animation: none; } }
+</style>
+
+<div class="text-white min-h-screen flex items-center justify-center px-4 py-2 font-sans overflow-hidden" style="background: var(--bg);">
+
+  <!-- 메인 게임 컨테이너 -->
+  <div id="game-container" class="relative w-full max-w-[360px] h-[640px] bg-slate-800 rounded-2xl shadow-2xl border-4 border-slate-700 overflow-hidden flex flex-col justify-between">
+
+    <!-- 실시간 HUD -->
+    <div id="hud" class="absolute top-0 left-0 w-full p-3 bg-gradient-to-b from-black/80 to-transparent z-10 flex justify-between items-center text-sm font-bold">
+      <div class="flex items-center space-x-1">
+        <span>⏱️</span>
+        <span id="time-display" class="text-yellow-400 text-base">60초</span>
+      </div>
+      <div class="flex items-center space-x-1">
+        <span>🚗</span>
+        <span id="score-display" class="text-green-400 text-base">0대</span>
+      </div>
+      <div class="flex items-center space-x-1">
+        <span>🏆</span>
+        <span id="best-display" class="text-purple-300 text-base">0대</span>
+      </div>
+    </div>
+
+    <!-- Canvas 게임 화면 -->
+    <canvas id="gameCanvas" width="360" height="640" class="w-full h-full block bg-slate-700"></canvas>
+
+    <!-- 휴대폰용 터치 버튼 -->
+    <div class="absolute bottom-4 left-0 w-full px-6 z-10 flex justify-between gap-4">
+      <button id="btn-left" class="flex-1 py-5 bg-slate-600/90 active:bg-slate-500 text-white text-2xl font-black rounded-2xl shadow-lg border-2 border-slate-400/50 backdrop-blur-sm">
+        ◀ LEFT
+      </button>
+      <button id="btn-right" class="flex-1 py-5 bg-slate-600/90 active:bg-slate-500 text-white text-2xl font-black rounded-2xl shadow-lg border-2 border-slate-400/50 backdrop-blur-sm">
+        RIGHT ▶
+      </button>
+    </div>
+
+    <!-- 시작 화면 -->
+    <div id="start-screen" class="absolute inset-0 bg-slate-900/95 backdrop-blur-md z-20 flex flex-col items-center justify-center p-6 text-center">
+      <h1 class="text-3xl font-black text-amber-400 tracking-wider mb-2">🚗 출근길 추월</h1>
+      <p class="text-xs text-slate-300 mb-6">60초 동안 앞차 20대를 추월하세요!</p>
+
+      <div class="bg-slate-800 p-4 rounded-xl text-left text-xs space-y-2 mb-8 border border-slate-700 w-full">
+        <p class="text-emerald-400 font-bold">🎮 조작 방법</p>
+        <p>• PC: 키보드 <span class="bg-slate-700 px-1 rounded">←</span> <span class="bg-slate-700 px-1 rounded">→</span> 또는 <span class="bg-slate-700 px-1 rounded">A</span> <span class="bg-slate-700 px-1 rounded">D</span></p>
+        <p>• 모바일: 하단 좌/우 터치 버튼</p>
+      </div>
+
+      <button id="start-btn" class="w-full py-4 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-black text-xl rounded-xl shadow-lg transition-transform cursor-pointer">
+        게임 시작 🚀
+      </button>
+    </div>
+
+    <!-- 결과 화면 -->
+    <div id="game-over-screen" class="hidden absolute inset-0 bg-slate-900/95 backdrop-blur-md z-20 flex flex-col items-center justify-center p-6 text-center">
+      <div id="result-badge" class="mb-2 px-3 py-1 bg-emerald-500/20 text-emerald-400 font-bold text-xs rounded-full border border-emerald-500/30">목표 달성! 🎉</div>
+      <h2 id="game-over-title" class="text-3xl font-black text-red-500 mb-2">게임 오버</h2>
+      <p id="game-over-reason" class="text-sm text-slate-300 mb-6">앞차와 부딪혔습니다.</p>
+
+      <div class="bg-slate-800 p-4 rounded-xl w-full mb-6 border border-slate-700 space-y-3">
+        <div class="flex justify-between items-center">
+          <span class="text-slate-400 text-sm">추월한 대수</span>
+          <span id="final-score" class="text-2xl font-black text-amber-400">0대</span>
+        </div>
+        <div class="flex justify-between items-center border-t border-slate-700 pt-2">
+          <span class="text-slate-400 text-sm">최고 기록</span>
+          <span id="final-best" class="text-xl font-bold text-purple-400">0대</span>
+        </div>
+      </div>
+
+      <!-- 피드백 남기기 버튼 (점수 자동 연동) -->
+      <a id="feedback-btn" href="#" target="_blank" rel="noopener" class="w-full py-3 mb-2 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold text-base rounded-xl shadow-lg transition-transform flex items-center justify-center gap-2">
+        📝 [피드백 남기기]
+      </a>
+
+      <button id="restart-btn" class="w-full py-4 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-xl rounded-xl shadow-lg transition-transform cursor-pointer">
+        다시 하기 🔄
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // 오래된 브라우저(iOS 15 이하)용 roundRect 대체
+  if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+      r = Math.min(r, w / 2, h / 2);
+      this.moveTo(x + r, y);
+      this.arcTo(x + w, y, x + w, y + h, r);
+      this.arcTo(x + w, y + h, x, y + h, r);
+      this.arcTo(x, y + h, x, y, r);
+      this.arcTo(x, y, x + w, y, r);
+      this.closePath();
+    };
+  }
+
+  // 최고 기록 저장소 (저장이 막힌 환경에서도 게임이 멈추지 않게)
+  function loadBest() {
+    try { return parseInt(localStorage.getItem('commute_game_best') || '0', 10) || 0; }
+    catch (e) { return 0; }
+  }
+  function saveBest(v) {
+    try { localStorage.setItem('commute_game_best', String(v)); } catch (e) {}
+  }
+
+  // 오디오 관련 안전 로직
+  let audioCtx = null;
+  function initAudio() {
+    try {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    } catch (e) {
+      console.warn("Audio Context Error:", e);
+    }
+  }
+
+  function playPassSound() {
+    if (!audioCtx) return;
+    try {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.08);
+      gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.08);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.08);
+    } catch(e){}
+  }
+
+  function playCrashSound() {
+    if (!audioCtx) return;
+    try {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(450, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(150, audioCtx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.15);
+    } catch(e){}
+  }
+
+  // 변수 선언
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+
+  const LERP_SPEED = 0.25;
+  const LANES = [60, 180, 300];
+  const CAR_WIDTH = 48;
+  const CAR_HEIGHT = 80;
+
+  let gameState = 'START';
+  let playerLane = 1;
+  let playerX = LANES[1];
+  let targetX = LANES[1];
+  let playerY = 500;
+
+  let obstacles = [];
+  let popups = [];
+  let score = 0;
+  let timeRemaining = 60;
+  let timerInterval = null;
+  let roadOffsetY = 0;
+  let lastSpawnTime = 0;
+  let spawnInterval = 1400;
+  let bestScore = loadBest();
+
+  const startScreen = document.getElementById('start-screen');
+  const gameOverScreen = document.getElementById('game-over-screen');
+  const gameContainer = document.getElementById('game-container');
+  const timeDisplay = document.getElementById('time-display');
+  const scoreDisplay = document.getElementById('score-display');
+  const bestDisplay = document.getElementById('best-display');
+  const finalScore = document.getElementById('final-score');
+  const finalBest = document.getElementById('final-best');
+  const gameOverTitle = document.getElementById('game-over-title');
+  const gameOverReason = document.getElementById('game-over-reason');
+  const resultBadge = document.getElementById('result-badge');
+  const feedbackBtn = document.getElementById('feedback-btn');
+
+  bestDisplay.textContent = bestScore + '대';
+
+  function moveLeft() {
+    if (gameState !== 'PLAYING') return;
+    if (playerLane > 0) {
+      playerLane--;
+      targetX = LANES[playerLane];
+    }
+  }
+
+  function moveRight() {
+    if (gameState !== 'PLAYING') return;
+    if (playerLane < 2) {
+      playerLane++;
+      targetX = LANES[playerLane];
+    }
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') moveLeft();
+    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') moveRight();
+  });
+
+  document.getElementById('btn-left').addEventListener('click', (e) => { e.preventDefault(); moveLeft(); });
+  document.getElementById('btn-right').addEventListener('click', (e) => { e.preventDefault(); moveRight(); });
+
+  function runStartGame() {
+    initAudio();
+
+    gameState = 'PLAYING';
+    playerLane = 1;
+    playerX = LANES[1];
+    targetX = LANES[1];
+    score = 0;
+    timeRemaining = 60;
+    obstacles = [];
+    popups = [];
+    spawnInterval = 1400;
+    lastSpawnTime = Date.now();
+
+    scoreDisplay.textContent = '0대';
+    timeDisplay.textContent = '60초';
+
+    startScreen.classList.add('hidden');
+    gameOverScreen.classList.add('hidden');
+
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+      if (gameState === 'PLAYING') {
+        timeRemaining--;
+        timeDisplay.textContent = timeRemaining + '초';
+        if (spawnInterval > 700) spawnInterval -= 30;
+
+        if (timeRemaining <= 0) {
+          endGame('TIME_UP');
+        }
+      }
+    }, 1000);
+  }
+
+  document.getElementById('start-btn').addEventListener('click', runStartGame);
+  document.getElementById('restart-btn').addEventListener('click', runStartGame);
+
+  function triggerFlash() {
+    gameContainer.classList.remove('flash');
+    void gameContainer.offsetWidth;
+    gameContainer.classList.add('flash');
+  }
+
+  function endGame(reason) {
+    gameState = 'GAMEOVER';
+    clearInterval(timerInterval);
+
+    if (score > bestScore) {
+      bestScore = score;
+      saveBest(bestScore);
+      bestDisplay.textContent = bestScore + '대';
+    }
+
+    if (reason === 'CRASH') {
+      playCrashSound();
+      triggerFlash();
+      gameOverTitle.textContent = '게임 오버';
+      gameOverReason.textContent = '앞차와 부딪혔습니다.';
+    } else {
+      gameOverTitle.textContent = '도착 완료!';
+      gameOverReason.textContent = '60초 제한 시간이 종료되었습니다.';
+    }
+
+    if (score >= 20) {
+      resultBadge.classList.remove('hidden');
+      resultBadge.textContent = '목표 달성! 🎉 (20대 이상 추월)';
+    } else {
+      resultBadge.classList.add('hidden');
+    }
+
+    finalScore.textContent = score + '대';
+    finalBest.textContent = bestScore + '대';
+
+    // 피드백 링크 설정: 아래 주소를 실제 구글 폼 '미리 채워진 링크'로 바꿔서 사용하세요.
+    const baseFormUrl = 'https://forms.gle/example?score=';
+    feedbackBtn.href = baseFormUrl + score;
+
+    gameOverScreen.classList.remove('hidden');
+  }
+
+  function spawnObstacle() {
+    const lane = Math.floor(Math.random() * 3);
+    const colors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const speed = 3.5 + Math.random() * 1.5;
+
+    obstacles.push({
+      x: LANES[lane],
+      y: -100,
+      lane: lane,
+      color: color,
+      speed: speed,
+      passed: false
+    });
+  }
+
+  function drawCar(x, y, color, isPlayer = false) {
+    ctx.save();
+    ctx.translate(x, y);
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.beginPath();
+    ctx.roundRect(-CAR_WIDTH/2 + 2, -CAR_HEIGHT/2 + 4, CAR_WIDTH, CAR_HEIGHT, 8);
+    ctx.fill();
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.roundRect(-CAR_WIDTH/2, -CAR_HEIGHT/2, CAR_WIDTH, CAR_HEIGHT, 8);
+    ctx.fill();
+
+    ctx.fillStyle = '#1e293b';
+    ctx.beginPath();
+    ctx.roundRect(-CAR_WIDTH/2 + 6, -CAR_HEIGHT/2 + 16, CAR_WIDTH - 12, CAR_HEIGHT - 32, 4);
+    ctx.fill();
+
+    if (isPlayer) {
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(-CAR_WIDTH/2 + 4, -CAR_HEIGHT/2 + 2, 8, 4);
+      ctx.fillRect(CAR_WIDTH/2 - 12, -CAR_HEIGHT/2 + 2, 8, 4);
+    } else {
+      ctx.fillStyle = '#dc2626';
+      ctx.fillRect(-CAR_WIDTH/2 + 4, CAR_HEIGHT/2 - 6, 8, 4);
+      ctx.fillRect(CAR_WIDTH/2 - 12, CAR_HEIGHT/2 - 6, 8, 4);
+    }
+
+    ctx.restore();
+  }
+
+  function update() {
+    if (gameState === 'PLAYING') {
+      roadOffsetY = (roadOffsetY + 8) % 40;
+
+      const now = Date.now();
+      if (now - lastSpawnTime > spawnInterval) {
+        spawnObstacle();
+        lastSpawnTime = now;
+      }
+
+      playerX += (targetX - playerX) * LERP_SPEED;
+    }
+
+    ctx.fillStyle = '#334155';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 4;
+    ctx.setLineDash([20, 20]);
+    ctx.lineDashOffset = roadOffsetY;
+
+    ctx.beginPath();
+    ctx.moveTo(120, 0); ctx.lineTo(120, canvas.height);
+    ctx.moveTo(240, 0); ctx.lineTo(240, canvas.height);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+      const obs = obstacles[i];
+      if (gameState === 'PLAYING') {
+        obs.y += obs.speed + 3;
+      }
+
+      drawCar(obs.x, obs.y, obs.color, false);
+
+      if (gameState === 'PLAYING') {
+        if (!obs.passed && obs.y > playerY + CAR_HEIGHT / 2) {
+          obs.passed = true;
+          score++;
+          scoreDisplay.textContent = score + '대';
+          playPassSound();
+
+          popups.push({
+            x: playerX,
+            y: playerY - 40,
+            text: '+1',
+            alpha: 1.0
+          });
+        }
+
+        const dx = Math.abs(playerX - obs.x);
+        const dy = Math.abs(playerY - obs.y);
+        if (dx < CAR_WIDTH * 0.75 && dy < CAR_HEIGHT * 0.75) {
+          endGame('CRASH');
+        }
+      }
+
+      if (obs.y > canvas.height + 100) {
+        obstacles.splice(i, 1);
+      }
+    }
+
+    drawCar(playerX, playerY, '#38bdf8', true);
+
+    for (let i = popups.length - 1; i >= 0; i--) {
+      const pop = popups[i];
+      ctx.fillStyle = `rgba(52, 211, 153, ${pop.alpha})`;
+      ctx.font = 'bold 24px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(pop.text, pop.x, pop.y);
+
+      if (gameState === 'PLAYING') {
+        pop.y -= 2;
+        pop.alpha -= 0.03;
+      }
+
+      if (pop.alpha <= 0) {
+        popups.splice(i, 1);
+      }
+    }
+
+    requestAnimationFrame(update);
+  }
+
+  requestAnimationFrame(update);
+</script>
+
+</body></html>
